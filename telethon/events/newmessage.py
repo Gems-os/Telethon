@@ -134,6 +134,13 @@ class NewMessage(EventBuilder):
                 entities=update.entities,
                 ttl_period=update.ttl_period
             ))
+        elif isinstance(update, types.UpdateMessageReactions):
+            event = cls.Event(types.Message(
+                id=update.msg_id,
+                peer_id=update.peer,
+                saved_peer_id=update.saved_peer_id,
+                reactions=update.reactions
+            ))
         else:
             return
 
