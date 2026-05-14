@@ -624,6 +624,22 @@ class MessageMethods:
         chat = next(c for c in r.chats if c.id == m.peer_id.channel_id)
         return utils.get_input_peer(chat), m.id
 
+    @staticmethod
+    def _to_reaction(reaction):
+        if reaction is None:
+            return None
+        if isinstance(reaction, str):
+            return types.ReactionEmoji(reaction)
+        return reaction
+
+    @classmethod
+    def _to_reactions(cls, reaction):
+        if reaction is None:
+            return None
+        if utils.is_list_like(reaction):
+            return [cls._to_reaction(x) for x in reaction]
+        return [cls._to_reaction(reaction)]
+
     async def send_message(
             self: 'TelegramClient',
             entity: 'hints.EntityLike',
@@ -942,6 +958,142 @@ class MessageMethods:
             return message
 
         return self._get_response_message(request, result, entity)
+
+    async def send_reaction(
+            self: 'TelegramClient',
+            entity: 'typing.Union[hints.EntityLike, types.Message]',
+            message: 'typing.Optional[hints.MessageIDLike]' = None,
+            reaction: 'typing.Union[str, types.TypeReaction, typing.Sequence[typing.Union[str, types.TypeReaction]]]' = None,
+            *,
+            big: bool = None,
+            add_to_recent: bool = None
+    ) -> 'types.Updates':
+        """
+        Reacts to a message.
+
+        Arguments
+            entity (`entity` | `Message <telethon.tl.custom.message.Message>`):
+                The chat where the message is located, or the message itself.
+
+            message (`int` | `Message <telethon.tl.custom.message.Message>`, optional):
+                The message or message ID to react to. This can be omitted if
+                ``entity`` is a message.
+
+            reaction (`str` | `Reaction` | `list`, optional):
+                The reaction or reactions to send. Strings are treated as
+                emoji reactions. Pass `None` to clear your reaction.
+
+            big (`bool`, optional):
+                Whether to send a bigger reaction animation.
+
+            add_to_recent (`bool`, optional):
+                Whether to add this reaction to the recent reactions list.
+
+        Returns
+            The resulting :tl:`Updates`.
+
+        Example
+            .. code-block:: python
+
+                message = await client.send_message(chat, 'hello')
+                await client.send_reaction(chat, message, '\\U0001f44d')
+                await client.send_reaction(message, '\\u2764')
+                await client.send_reaction(message, None)
+        """
+        if isinstance(entity, types.Message):
+            if reaction is None:
+                reaction = message
+            message = entity
+            entity = entity.peer_id
+
+        entity = await self.get_input_entity(entity)
+        return await self(functions.messages.SendReactionRequest(
+            peer=entity,
+            msg_id=utils.get_message_id(message),
+            reaction=self._to_reactions(reaction),
+            big=big,
+            add_to_recent=add_to_recent
+        ))
+
+    async def get_messages_reactions(
+            self: 'TelegramClient',
+            entity: 'typing.Union[hints.EntityLike, types.Message]',
+            messages: 'typing.Union[hints.MessageIDLike, typing.Sequence[hints.MessageIDLike]]' = None
+    ) -> 'types.Updates':
+        """
+        Fetches full reactions for one or more messages.
+
+        Arguments
+            entity (`entity` | `Message <telethon.tl.custom.message.Message>`):
+                The chat where the messages are located, or a single message.
+
+            messages (`int` | `Message <telethon.tl.custom.message.Message>` | `list`, optional):
+                The message or messages whose reactions should be fetched. This
+                can be omitted if ``entity`` is a message.
+
+        Returns
+            The resulting :tl:`Updates`, usually containing
+            :tl:`UpdateMessageReactions`.
+        """
+        if isinstance(entity, types.Message):
+            messages = entity if messages is None else messages
+            entity = entity.peer_id
+
+        if not utils.is_list_like(messages):
+            messages = (messages,)
+
+        entity = await self.get_input_entity(entity)
+        return await self(functions.messages.GetMessagesReactionsRequest(
+            peer=entity,
+            id=[utils.get_message_id(x) for x in messages]
+        ))
+
+    async def get_message_reactions_list(
+            self: 'TelegramClient',
+            entity: 'typing.Union[hints.EntityLike, types.Message]',
+            message: 'typing.Optional[hints.MessageIDLike]' = None,
+            *,
+            reaction: 'typing.Union[str, types.TypeReaction]' = None,
+            offset: str = None,
+            limit: int = 100
+    ) -> 'types.messages.MessageReactionsList':
+        """
+        Fetches the list of users who reacted to a message.
+
+        Arguments
+            entity (`entity` | `Message <telethon.tl.custom.message.Message>`):
+                The chat where the message is located, or the message itself.
+
+            message (`int` | `Message <telethon.tl.custom.message.Message>`, optional):
+                The message or message ID whose reaction list should be fetched.
+                This can be omitted if ``entity`` is a message.
+
+            reaction (`str` | `Reaction`, optional):
+                Filter by a specific reaction. Strings are treated as emoji
+                reactions.
+
+            offset (`str`, optional):
+                Offset for pagination, as returned by Telegram.
+
+            limit (`int`, optional):
+                Maximum number of reactions to fetch.
+
+        Returns
+            The resulting :tl:`messages.MessageReactionsList`.
+        """
+        if isinstance(entity, types.Message):
+            reaction = message if reaction is None else reaction
+            message = entity
+            entity = entity.peer_id
+
+        entity = await self.get_input_entity(entity)
+        return await self(functions.messages.GetMessageReactionsListRequest(
+            peer=entity,
+            id=utils.get_message_id(message),
+            reaction=self._to_reaction(reaction),
+            offset=offset,
+            limit=limit
+        ))
 
     async def forward_messages(
             self: 'TelegramClient',
