@@ -135,9 +135,14 @@ class NewMessage(EventBuilder):
                 ttl_period=update.ttl_period
             ))
         elif isinstance(update, types.UpdateMessageReactions):
+            from_id = None
+            if update.reactions.recent_reactions:
+                from_id = update.reactions.recent_reactions[0].peer_id
+
             event = cls.Event(types.Message(
                 id=update.msg_id,
                 peer_id=update.peer,
+                from_id=from_id,
                 saved_peer_id=update.saved_peer_id,
                 reactions=update.reactions
             ))
